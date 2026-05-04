@@ -45,44 +45,11 @@ Um dashboard de nível executivo exige leitura instantânea, redução da carga 
 
 ## 4. Engenharia e Modelagem de Dados
 
-Para garantir a performance do painel com filtros dinâmicos, os dados transacionais brutos foram estruturados em um modelo **Star Schema** clássico, centralizando a `Fato_Vendas` e conectando-a a dimensões como Tempo, Clientes, Produtos, Vendedores e Transportadoras.
+Para garantir a performance do painel e o cruzamento correto de filtros, os dados transacionais brutos foram estruturados seguindo os preceitos de modelagem dimensional **Star Schema**.
 
-<details>
-<summary><b>🛠️ Script 01: Tratamento e Conexão (Power Query M) (Clique para expandir)</b></summary>
-```powerquery
-let
-    // Conexão com a base de dados transacional
-    Fonte = Sql.Database("Servidor_Northwind", "NorthwindDB"),
-    dbo_Orders = Fonte{[Schema="dbo",Item="Orders"]}[Data],
-    
-    // Mescla com Detalhes do Pedido para expansão granular
-    #"Consultas Mescladas" = Table.NestedJoin(dbo_Orders, {"OrderID"}, OrderDetails, {"OrderID"}, "OrderDetails", JoinKind.Inner),
-    #"OrderDetails Expandido" = Table.ExpandTableColumn(#"Consultas Mescladas", "OrderDetails", {"ProductID", "UnitPrice", "Quantity", "Discount"}, {"ProductID", "UnitPrice", "Quantity", "Discount"}),
-    
-    // Tratamento de Datas para logística
-    #"Tipo Alterado" = Table.TransformColumnTypes(#"OrderDetails Expandido",{{"OrderDate", type date}, {"RequiredDate", type date}, {"ShippedDate", type date}}),
-    
-    // Criação de coluna condicional para atrasos
-    #"Atraso Calculado" = Table.AddColumn(#"Tipo Alterado", "Entrega no Prazo", each if [ShippedDate] <= [RequiredDate] then 1 else 0)
-in
-    #"Atraso Calculado"
-```
-</details>
-
-<details>
-<summary><b>🛠️ Script 02: Geração da Dimensão Calendário (DAX) (Clique para expandir)</b></summary>
-```dax
-dCalendario = 
-ADDCOLUMNS(
-    CALENDARAUTO(),
-    "Ano", YEAR([Date]),
-    "Mês Nome", FORMAT([Date], "mmmm"),
-    "Mês Num", MONTH([Date]),
-    "Trimestre", "Tri " & FORMAT([Date], "q"),
-    "AnoMês", FORMAT([Date], "YYYY-MM")
-)
-```
-</details>
+* **Tabelas Fato:** Construção da base transacional contendo o histórico de pedidos e o detalhamento do faturamento por item, garantindo a granularidade correta para análise de ticket médio e volume.
+* **Tabelas Dimensão:** Estruturação de dimensões auxiliares para o contexto do negócio, isolando cadastros de Clientes, Produtos, Vendedores, Categorias e Transportadoras.
+* **Inteligência Temporal:** Implementação de uma Dimensão Calendário dedicada (`dCalendario`) para suportar toda a inteligência de tempo do dashboard (análises YoY, sazonalidades mensais e cruzamento de datas logísticas).
 
 ---
 
